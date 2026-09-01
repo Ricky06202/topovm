@@ -6,9 +6,9 @@
 # Estrategia:
 # - Wine estable (wineWow64Packages.stable) en el sistema.
 # - Los instaladores NO están en el repo git (son 380MB y no caben en GitHub).
-#   Se copian desde el disco LOCAL de la máquina anfitriona (carpeta de
-#   Descargas de Ricky) al wineprefix DENTRO de la VM, vía activationScript
-#   de activación. La ruta local se ajusta abajo (LOCAL_INSTALLERS).
+#   Se empaquetan en la imagen desde el DISCO DEL ANFITRIÓN (carpeta de
+#   Descargas de Ricky) durante el BUILD del .ova — quedan en /nix/store de la VM.
+#   Ajusta LOCAL_INSTALLERS abajo si la carpeta cambia.
 # - Cada programa tiene un launcher que: la 1ª vez inicia el wineprefix
 #   (wineboot -i) y después corre el instalador con Wine (el abuelo responde
 #   el wizard). Los launchers se exponen en el escritorio como .desktop.
@@ -30,14 +30,29 @@ let
   instDir = "${home}/Instaladores";
 
   # Ruta LOCAL (anfitrión) donde están los instaladores de Windows.
-  # Ajustar si cambia de carpeta: la carpeta "Programas de equipos" del abuelo.
+  # Solo existe/importa al BUILD en la máquina de Ricky (no en el repo git).
   localInstallers = "/home/ricky/Descargas/Programas de equipos";
 
   wine = pkgs.wineWow64Packages.stable;
 
+  # ---------- Empaquetar los instaladores desde el host ----------
+  # Se importan al Nix store como fuentes del build (quedan en /nix/store de la
+  # VM). NOTA: solo funciona si la carpeta existe en el equipo de build (Ricky).
+  base = builtins.path { path = localInstallers; name = "topo-instaladores-local"; };
+  leicaSrc   = "${base}/Instalador Leica Survey Office";
+  csVivaSrc  = "${base}/PC Simulator CS";
+  carlsonSrc = "${base}/Carlson.Simplicity.Sight.Survey.2016.v3.0.0";
+
+  installersStore = pkgs.runCommand "topo-installers" { } ''
+    mkdir -p $out
+    cp -r "${leicaSrc}" "$out/Instalador Leica Survey Office"
+    cp -r "${csVivaSrc}" "$out/PC Simulator CS"
+    cp -r "${carlsonSrc}" "$out/Carlson.Simplicity.Sight.Survey.2016.v3.0.0"
+  '';
+
   # Launcher de un instalador concreto dentro del wineprefix.
-  # winpath es la ruta del .exe relativa a ${instDir} (en formato Windows)
-  mkInstallerRunner = pname: winpath: pkgs.writeShellScriptBin "topo-install-${pname}" ''
+  # exe es la ruta del .exe RELATIVA a ${instDir}.
+  mkInstallerRunner = pname: exe: pkgs.writeShellScriptBin "topo-install-${pname}" ''
     set -e
     export WINEPREFIX="${prefix}"
     export WINEDEBUG=-all
@@ -47,8 +62,8 @@ let
       touch "$WINEPREFIX/.wine-initialized"
       echo "Wine prefix preparado."
     fi
-    cd "${instDir}"
-    exec "${wine}/bin/wine" "${winpath}"
+    cd "${installersStore}"
+    exec "${wine}/bin/wine" "${exe}"
   '';
 
   winecfgRunner = pkgs.writeShellScriptBin "topo-winecfg" ''
@@ -58,8 +73,6 @@ let
   '';
 
   # Lista de accesos al escritorio.
-  # El runner ya codifica la ruta del .exe (relativa a ${instDir}) y hace
-  # `cd ${instDir}` antes, así los instaladores InstallShield leen sus .cab.
   launchers = [
     {
       pname     = "leica";
@@ -85,22 +98,13 @@ in {
   ] ++ (map (l: l.runner) launchers) ++ [ winecfgRunner ];
 
   system.activationScripts.topoWine = lib.mkAfter ''
-    mkdir -p "${instDir}" "${prefix}"
-    # Instaladores desde el HOST (carpeta local del anfitrión), no del repo.
-    if [ -d "${localInstallers}" ]; then
-      cp -r "${localInstallers}/"Carlson.Simplicity.Sight.Survey.2016.v3.0.0 "${instDir}"/ 2>/dev/null || true
-      cp -r "${localInstallers}/"Instalador\ Leica\ Survey\ Office "${instDir}"/ 2>/dev/null || true
-      cp -r "${localInstallers}/"PC\ Simulator\ CS "${instDir}"/ 2>/dev/null || true
-    else
-      echo "AVISO: no se encontró ${localInstallers}. Copia los instaladores a ${instDir} manualmente."
-    fi
-    chmod -R u+w "${instDir}"
-    chown -R topografia:users "${instDir}" "${prefix}" 2>/dev/null || true
+    mkdir -p "${prefix}"
+    chown -R topografia:users "${prefix}" 2>/dev/null || true
   '';
 
   system.activationScripts.topoDesktopWine = lib.mkAfter ''
     mkdir -p "${desktop}"
-    # Manuales (copiados, no symlinks: el store es inmutable)
+    # Manuales (copiados desde el store: el store es inmutable)
     cp -r ${./manuals}/"CARPETA DE DIGITAL" "${desktop}/" 2>/dev/null || true
     cp -r ${./manuals}/"Manual Simulador"   "${desktop}/" 2>/dev/null || true
     chown -R topografia:users "${desktop}/CARPETA DE DIGITAL" "${desktop}/Manual Simulador" 2>/dev/null || true
