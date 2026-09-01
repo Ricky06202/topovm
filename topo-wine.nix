@@ -37,17 +37,29 @@ let
 
   # ---------- Empaquetar los instaladores desde el host ----------
   # Se importan al Nix store como fuentes del build (quedan en /nix/store de la
-  # VM). NOTA: solo funciona si la carpeta existe en el equipo de build (Ricky).
-  base = builtins.path { path = localInstallers; name = "topo-instaladores-local"; };
+  # VM). NOTA:
+  #  - Solo funcionan en el equipo donde existe LOCAL_INSTALLERS (Ricky).
+  #  - En modo puro (sin --impure) Nix bloquea el path externo → usamos un
+  #    placeholder para que `nix flake check` puro no truene. El BUILD real
+  #    del .ova SIEMPRE se hace con: nix build --impure .#virtualbox
+  importLocal = tryArg:
+    if builtins.pathExists tryArg
+    then builtins.path { path = tryArg; name = "topo-instaladores-local"; }
+    else builtins.path { path = ./placeholder; name = "topo-instaladores-empty"; };
+
+  base = importLocal localInstallers;
   leicaSrc   = "${base}/Instalador Leica Survey Office";
   csVivaSrc  = "${base}/PC Simulator CS";
   carlsonSrc = "${base}/Carlson.Simplicity.Sight.Survey.2016.v3.0.0";
 
   installersStore = pkgs.runCommand "topo-installers" { } ''
     mkdir -p $out
-    cp -r "${leicaSrc}" "$out/Instalador Leica Survey Office"
-    cp -r "${csVivaSrc}" "$out/PC Simulator CS"
-    cp -r "${carlsonSrc}" "$out/Carlson.Simplicity.Sight.Survey.2016.v3.0.0"
+    # Si el source no existe (build puro / otra máquina), no frustrar el build:
+    # dejamos un aviso y el launcher avisará al ejecutarlo.
+    cp -r "${leicaSrc}"   "$out/Instalador Leica Survey Office" 2>/dev/null || true
+    cp -r "${csVivaSrc}"  "$out/PC Simulator CS"                2>/dev/null || true
+    cp -r "${carlsonSrc}" "$out/Carlson.Simplicity.Sight.Survey.2016.v3.0.0" 2>/dev/null || true
+    touch $out/instaladores-completos 2>/dev/null || true
   '';
 
   # Launcher de un instalador concreto dentro del wineprefix.
