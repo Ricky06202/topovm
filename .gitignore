@@ -1,0 +1,11 @@
+# Instaladores de Windows (grandes: 380MB). NO se suben a git.
+# Cópialos localmente desde tu carpeta de Descargas antes de buildear:
+#   cp -r ~/Descargas/"Programas de equipos"/Carlson.Simplicity.Sight.Survey.2016.v3.0.0 programs/
+#   cp -r ~/Descargas/"Programas de equipos"/"Instalador Leica Survey Office" programs/
+#   cp -r ~/Descargas/"Programas de equipos"/"PC Simulator CS" programs/
+programs/
+
+# Artefactos de build
+result
+result-*
+build-iso.log
