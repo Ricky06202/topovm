@@ -27,7 +27,6 @@ let
   home    = "/home/topografia";
   desktop = "${home}/Desktop";
   prefix  = "${home}/.wine-topo";
-  instDir = "${home}/Instaladores";
 
   # Ruta LOCAL (anfitrión) donde están los instaladores de Windows.
   # Solo existe/importa al BUILD en la máquina de Ricky (no en el repo git).
