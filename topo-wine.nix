@@ -5,11 +5,14 @@
 #
 # Estrategia:
 # - Wine estable (wineWow64Packages.stable) en el sistema.
-# - Los instaladores se copian a /home/topografia/Instaladores en el build.
+# - Los instaladores NO están en el repo git (son 380MB y no caben en GitHub).
+#   Se copian desde el disco LOCAL de la máquina anfitriona (carpeta de
+#   Descargas de Ricky) al wineprefix DENTRO de la VM, vía activationScript
+#   de activación. La ruta local se ajusta abajo (LOCAL_INSTALLERS).
 # - Cada programa tiene un launcher que: la 1ª vez inicia el wineprefix
 #   (wineboot -i) y después corre el instalador con Wine (el abuelo responde
 #   el wizard). Los launchers se exponen en el escritorio como .desktop.
-# - Las 2 carpetas de manuales se copian al escritorio.
+# - Las 2 carpetas de manuales se copian al escritorio (estos SÍ van en git).
 #
 # wineprefix compartido: /home/topografia/.wine-topo
 # Acceso manual (licencias, registro, instaladores):
@@ -25,6 +28,10 @@ let
   desktop = "${home}/Desktop";
   prefix  = "${home}/.wine-topo";
   instDir = "${home}/Instaladores";
+
+  # Ruta LOCAL (anfitrión) donde están los instaladores de Windows.
+  # Ajustar si cambia de carpeta: la carpeta "Programas de equipos" del abuelo.
+  localInstallers = "/home/ricky/Descargas/Programas de equipos";
 
   wine = pkgs.wineWow64Packages.stable;
 
@@ -79,7 +86,14 @@ in {
 
   system.activationScripts.topoWine = lib.mkAfter ''
     mkdir -p "${instDir}" "${prefix}"
-    cp -r ${./programs}/. "${instDir}"/
+    # Instaladores desde el HOST (carpeta local del anfitrión), no del repo.
+    if [ -d "${localInstallers}" ]; then
+      cp -r "${localInstallers}/"Carlson.Simplicity.Sight.Survey.2016.v3.0.0 "${instDir}"/ 2>/dev/null || true
+      cp -r "${localInstallers}/"Instalador\ Leica\ Survey\ Office "${instDir}"/ 2>/dev/null || true
+      cp -r "${localInstallers}/"PC\ Simulator\ CS "${instDir}"/ 2>/dev/null || true
+    else
+      echo "AVISO: no se encontró ${localInstallers}. Copia los instaladores a ${instDir} manualmente."
+    fi
     chmod -R u+w "${instDir}"
     chown -R topografia:users "${instDir}" "${prefix}" 2>/dev/null || true
   '';
